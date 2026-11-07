@@ -8,6 +8,8 @@ import html
 from datetime import datetime
 from dotenv import load_dotenv
 from flask import Flask
+from threading import Thread
+
 
 # =========================================================
 # KONFIGURACJA
@@ -2333,9 +2335,7 @@ async def on_ready():
 # START
 # =========================================================
 
-
-
-app = Flask(name)
+app = Flask(__name__)
 
 
 @app.route("/")
@@ -2359,12 +2359,6 @@ keep_alive()
 if __name__ == "__main__":
 
     if TOKEN == "TWÓJ_TOKEN":
+        print("USTAW TOKEN BOTA W ZMIENNEJ TOKEN!")
 
-        print(
-            "USTAW TOKEN BOTA W ZMIENNEJ TOKEN!"
-        )
-
-    bot.run(
-        TOKEN
-    )
-    
+    bot.run(TOKEN)    
