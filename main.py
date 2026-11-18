@@ -1,127 +1,96 @@
-
-            message = await channel.fetch_message(
-                saved_id
-            )
-
-            if (
-                message
-                and bot.user
-                and message.author.id == bot.user.id
-            ):
-
-                print(
-                    "[TICKET PANEL] Panel już istnieje."
-                )
-
-                return
-
-        except discord.NotFound:
-
-            # Zapisany panel naprawdę nie istnieje — można utworzyć nowy.
-            pass
-
-        except discord.HTTPException as e:
-
-            # Przy 429 lub innym błędzie API NIE wysyłamy kolejnego panelu.
-            # Wcześniej wyjątek był ignorowany, co mogło powodować kolejne
-            # zapytania i duplikowanie paneli przy każdym reconnectcie.
-            print(
-                f"[TICKET PANEL] Nie udało się sprawdzić panelu: {e}. "
-                "Pomijam tworzenie nowego panelu."
-            )
-            return
-
-    # =====================================================
-    # NOWY PANEL
-    # =====================================================
-
-    try:
-        message = await channel.send(
-            view=TicketPanelView()
-        )
-    except discord.HTTPException as e:
-        print(f"[TICKET PANEL] Nie udało się utworzyć panelu: {e}")
-        return
-
-    save_panel_message_id(
-        message.id
-    )
-
-    print(
-        f"[TICKET PANEL] Utworzono panel: "
-        f"{message.id}"
-    )
+import discord
+from discord.ext import commands
+from discord import ui
+import asyncio
+import json
+import os
+import html
+from datetime import datetime
+from dotenv import load_dotenv
+from flask import Flask
+from threading import Thread
 
 
 # =========================================================
-# READY
+# KONFIGURACJA
 # =========================================================
 
-@bot.event
-async def on_ready():
+load_dotenv()
 
-    global views_registered, setup_complete
+TOKEN = os.getenv("DISCORD_TOKEN")
 
-    print(
-        f"Zalogowano jako {bot.user} "
-        f"(ID: {bot.user.id})"
-    )
+if not TOKEN:
+    raise ValueError("Brak DISCORD_TOKEN w pliku .env")
 
-    # on_ready może uruchomić się ponownie po reconnectcie.
-    # Nie wykonujemy wtedy ponownie konfiguracji i zapytań REST.
-    if setup_complete:
-        print("[READY] Konfiguracja była już wykonana — pomijam.")
-        return
+# Kanał głównego panelu ticketów
+TICKET_PANEL_CHANNEL_ID = 1563911023755264133
 
-    # Persistent views rejestrujemy tylko raz na proces.
-    if not views_registered:
-        bot.add_view(TicketPanelView())
-        bot.add_view(
-            TicketActionView(
-                ticket_type="inne",
-                owner_mention="@user",
-                category_name="Inne"
-            )
-        )
-        views_registered = True
+# Kategoria ticketów
+TICKET_CATEGORY_ID = 1563911023495352410
 
-    try:
-        await set_bot_status()
-        await ensure_ticket_panel()
-    except discord.HTTPException as e:
-        print(f"[READY] Błąd Discord API podczas konfiguracji: {e}")
-    except Exception as e:
-        print(f"[READY] Nieoczekiwany błąd konfiguracji: {e}")
-    finally:
-        # Zapobiega ponawianiu tych samych operacji przy reconnectach.
-        setup_complete = True
+# Kanał transcriptów
+TRANSCRIPT_CHANNEL_ID = 1563911023495352412
 
-    print("Bot jest gotowy.")
+# Kanał powitań
+WELCOME_CHANNEL_ID = 1563911023495352416
 
 
 # =========================================================
-# START
+# ROLE
 # =========================================================
 
-app = Flask(__name__)
+# Rekrutacja
+RECRUITMENT_ROLE_ID = 1563911021863641237
+
+# Klatki + Inne
+GENERAL_SUPPORT_ROLE_ID = 1563911022270619701
+
+# Support do wszystkiego
+UNIVERSAL_SUPPORT_ROLE_ID = 1563911022270619701
 
 
-@app.route("/")
-def home():
-    return "Bot Discord działa!", 200
+# =========================================================
+# OBRAZKI
+# =========================================================
+
+# Panel ticketów
+PANEL_IMAGE_URL = (
+    "https://cdn.discordapp.com/attachments/1508833559551410198/"
+    "1548676447579676672/"
+    "Gemini_Generated_Image_8lu4pd8lu4pd8lu4.jpg"
+    "?ex=6aa7ecd6&is=6aa69b56"
+    "&hm=76ee4baf615ec0737403f12741f42168b7d6e3db24486e9460eced6071f95bb5"
+)
+
+# Ticket
+TICKET_IMAGE_URL = PANEL_IMAGE_URL
+
+# Powitanie
+WELCOME_IMAGE_URL = (
+    "https://cdn.discordapp.com/attachments/1508833559551410198/"
+    "1548676441854705775/"
+    "Gemini_Generated_Image_o4qcdio4qcdio4qc.jpg"
+    "?ex=6aa7ecd4&is=6aa69b54"
+    "&hm=562654d9233117f320f4f8bc738d14da08e8e8bffdc4d6252b63c16c077a0c&"
+)
+
+# Loader transcriptu
+TRANSCRIPT_LOADING_IMAGE = (
+    "https://cdn.discordapp.com/attachments/1508833559551410198/"
+    "1548680146813325363/"
+    "obraz_2026-09-13_143612130-removebg-preview.png"
+    "?ex=6aa7f048&is=6aa69ec8"
+    "&hm=bb0cce064bcc6c62ff5e903adfa486cfccfe13e4e051cde1f94596d1a341b760"
+)
 
 
-def run_web():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+# =========================================================
+# EMOJI
+# =========================================================
+
+ARROW = "<a:strzal:1568726971943354459>"
+PONNY = "<:ponny:1568727308137922621>"
 
 
-def keep_alive():
-    server = Thread(target=run_web, daemon=True)
-    server.start()
-
-
-keep_alive()
-
-
-if __name__ == "__main__":
+# =========================================================
+# DANE
