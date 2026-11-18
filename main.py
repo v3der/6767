@@ -20,86 +20,42 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 if not TOKEN:
-    raise ValueError("Brak DISCORD_TOKEN w pliku .env")
+    raise ValueError("Brak DISCORD_TOKEN w zmiennej DISCORD_TOKEN")
 
-
-# =========================================================
-# KANAŁY
-# =========================================================
-
-# Kanał głównego panelu ticketów
 TICKET_PANEL_CHANNEL_ID = 1563911023755264133
-
-# Kategoria ticketów
 TICKET_CATEGORY_ID = 1563911023495352410
-
-# Kanał transcriptów
 TRANSCRIPT_CHANNEL_ID = 1563911023495352412
-
-# Kanał powitań
 WELCOME_CHANNEL_ID = 1563911023495352416
 
-
-# =========================================================
-# ROLE
-# =========================================================
-
-# Rekrutacja
 RECRUITMENT_ROLE_ID = 1563911021863641237
-
-# Klatki + Inne
 GENERAL_SUPPORT_ROLE_ID = 1563911022270619701
-
-# Support do wszystkiego
 UNIVERSAL_SUPPORT_ROLE_ID = 1563911022270619701
 
-
-# =========================================================
-# OBRAZKI
-# =========================================================
-
-# Panel ticketów
 PANEL_IMAGE_URL = (
     "https://cdn.discordapp.com/attachments/1508833559551410198/"
-    "1548676447579676672/"
-    "Gemini_Generated_Image_8lu4pd8lu4pd8lu4.jpg"
+    "1548676447579676672/Gemini_Generated_Image_8lu4pd8lu4pd8lu4.jpg"
     "?ex=6aa7ecd6&is=6aa69b56"
     "&hm=76ee4baf615ec0737403f12741f42168b7d6e3db24486e9460eced6071f95bb5"
 )
 
-# Ticket
 TICKET_IMAGE_URL = PANEL_IMAGE_URL
 
-# Powitanie
 WELCOME_IMAGE_URL = (
     "https://cdn.discordapp.com/attachments/1508833559551410198/"
-    "1548676441854705775/"
-    "Gemini_Generated_Image_o4qcdio4qcdio4qc.jpg"
+    "1548676441854705775/Gemini_Generated_Image_o4qcdio4qcdio4qc.jpg"
     "?ex=6aa7ecd4&is=6aa69b54"
     "&hm=562654d9233117f320f4f8bc738d14da08e8e8bffdc4d6252b63c16c077a0c&"
 )
 
-# Loader transcriptu
 TRANSCRIPT_LOADING_IMAGE = (
     "https://cdn.discordapp.com/attachments/1508833559551410198/"
-    "1548680146813325363/"
-    "obraz_2026-09-13_143612130-removebg-preview.png"
+    "1548680146813325363/obraz_2026-09-13_143612130-removebg-preview.png"
     "?ex=6aa7f048&is=6aa69ec8"
     "&hm=bb0cce064bcc6c62ff5e903adfa486cfccfe13e4e051cde1f94596d1a341b760"
 )
 
-
-# =========================================================
-# EMOJI
-# =========================================================
-
 ARROW = "<a:strzal:1568726971943354459>"
 PONNY = "<:ponny:1568727308137922621>"
-
-
-# =========================================================
-# DANE
-# =========================================================
 
 DATA_DIR = "data"
 PANEL_FILE = os.path.join(DATA_DIR, "panel.json")
@@ -112,7 +68,6 @@ os.makedirs(DATA_DIR, exist_ok=True)
 # =========================================================
 
 intents = discord.Intents.default()
-
 intents.guilds = True
 intents.members = True
 intents.messages = True
@@ -128,42 +83,23 @@ bot = commands.Bot(
     intents=intents
 )
 
-
-# =========================================================
-# ZABEZPIECZENIA INICJALIZACJI
-# =========================================================
-
 views_registered = False
-ready_initialized = False
-
-# Zabezpieczenie przed jednoczesnym wykonaniem inicjalizacji
-ready_lock = asyncio.Lock()
+panel_lock = asyncio.Lock()
 
 
 # =========================================================
-# STATUS BOTA
+# STATUS
 # =========================================================
 
 async def set_bot_status():
-
     try:
-
         await bot.change_presence(
             status=discord.Status.dnd,
-            activity=discord.Game(
-                name="Gildia Ponny Topka"
-            )
+            activity=discord.Game(name="Gildia Ponny Topka")
         )
-
-        print(
-            "[STATUS] Nie przeszkadzać | Gildia Ponny Topka"
-        )
-
+        print("[STATUS] Nie przeszkadzać | Gildia Ponny Topka")
     except discord.HTTPException as e:
-
-        print(
-            f"[STATUS ERROR] Nie udało się ustawić statusu: {e}"
-        )
+        print(f"[STATUS ERROR] {e}")
 
 
 # =========================================================
@@ -171,91 +107,61 @@ async def set_bot_status():
 # =========================================================
 
 def save_panel_message_id(message_id: int):
-
-    try:
-
-        with open(
-            PANEL_FILE,
-            "w",
-            encoding="utf-8"
-        ) as f:
-
-            json.dump(
-                {
-                    "message_id": message_id
-                },
-                f
-            )
-
-    except Exception as e:
-
-        print(
-            f"[PANEL JSON ERROR] Nie można zapisać ID panelu: {e}"
-        )
+    with open(PANEL_FILE, "w", encoding="utf-8") as f:
+        json.dump({"message_id": message_id}, f)
 
 
 def load_panel_message_id():
-
     if not os.path.exists(PANEL_FILE):
         return None
 
     try:
-
-        with open(
-            PANEL_FILE,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            data = json.load(f)
-
-        return data.get("message_id")
-
-    except Exception as e:
-
-        print(
-            f"[PANEL JSON ERROR] Nie można odczytać ID panelu: {e}"
-        )
-
+        with open(PANEL_FILE, "r", encoding="utf-8") as f:
+            return json.load(f).get("message_id")
+    except (OSError, json.JSONDecodeError):
         return None
+
+
+# =========================================================
+# BEZPIECZNE ODPOWIADANIE NA INTERAKCJĘ
+# =========================================================
+
+async def safe_ephemeral(
+    interaction: discord.Interaction,
+    content: str
+):
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(
+                content,
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                content,
+                ephemeral=True
+            )
+    except discord.HTTPException as e:
+        print(f"[INTERACTION RESPONSE ERROR] {e}")
 
 
 # =========================================================
 # ROLE / UPRAWNIENIA
 # =========================================================
 
-def is_universal_support(
-    member: discord.Member
-):
-
-    return member.get_role(
-        UNIVERSAL_SUPPORT_ROLE_ID
-    ) is not None
+def is_universal_support(member: discord.Member):
+    return member.get_role(UNIVERSAL_SUPPORT_ROLE_ID) is not None
 
 
-def is_general_support(
-    member: discord.Member
-):
-
-    return member.get_role(
-        GENERAL_SUPPORT_ROLE_ID
-    ) is not None
+def is_general_support(member: discord.Member):
+    return member.get_role(GENERAL_SUPPORT_ROLE_ID) is not None
 
 
-def is_recruitment_support(
-    member: discord.Member
-):
-
-    return member.get_role(
-        RECRUITMENT_ROLE_ID
-    ) is not None
+def is_recruitment_support(member: discord.Member):
+    return member.get_role(RECRUITMENT_ROLE_ID) is not None
 
 
-def can_close_ticket(
-    member: discord.Member,
-    ticket_type: str
-):
-
+def can_close_ticket(member: discord.Member, ticket_type: str):
     if is_universal_support(member):
         return True
 
@@ -275,9 +181,9 @@ def can_close_ticket(
 # TYP TICKETU
 # =========================================================
 
-def get_ticket_type_from_channel(
-    channel: discord.TextChannel
-):
+def get_ticket_type_from_channel(channel):
+    if not isinstance(channel, discord.TextChannel):
+        return None
 
     topic = channel.topic or ""
 
@@ -297,24 +203,17 @@ def get_ticket_type_from_channel(
 # OWNER ID
 # =========================================================
 
-def get_ticket_owner_id(
-    channel: discord.TextChannel
-):
+def get_ticket_owner_id(channel):
+    if not isinstance(channel, discord.TextChannel):
+        return None
 
     topic = channel.topic or ""
 
     for part in topic.split("|"):
-
         if part.startswith("owner_id="):
-
             try:
-
-                return int(
-                    part.split("=", 1)[1]
-                )
-
+                return int(part.split("=", 1)[1])
             except ValueError:
-
                 return None
 
     return None
@@ -324,19 +223,12 @@ def get_ticket_owner_id(
 # NAZWA TICKETU
 # =========================================================
 
-def ticket_name(
-    member: discord.Member,
-    ticket_type: str
-):
-
+def ticket_name(member: discord.Member, ticket_type: str):
     category_name = {
         "klatki": "klatki",
         "rekrutacja": "rekrutacja",
         "inne": "inne"
-    }.get(
-        ticket_type,
-        ticket_type
-    )
+    }.get(ticket_type, ticket_type)
 
     safe_name = (
         member.name
@@ -356,30 +248,16 @@ async def user_has_open_ticket(
     guild: discord.Guild,
     user_id: int
 ):
+    category = guild.get_channel(TICKET_CATEGORY_ID)
 
-    category = guild.get_channel(
-        TICKET_CATEGORY_ID
-    )
-
-    if not isinstance(
-        category,
-        discord.CategoryChannel
-    ):
+    if not isinstance(category, discord.CategoryChannel):
         return None
 
     for channel in category.channels:
-
-        if not isinstance(
-            channel,
-            discord.TextChannel
-        ):
+        if not isinstance(channel, discord.TextChannel):
             continue
 
-        owner_id = get_ticket_owner_id(
-            channel
-        )
-
-        if owner_id == user_id:
+        if get_ticket_owner_id(channel) == user_id:
             return channel
 
     return None
@@ -387,33 +265,27 @@ async def user_has_open_ticket(
 
 # =========================================================
 # PANEL TICKETÓW
-# COMPONENTS V2
 # =========================================================
 
 class TicketSelect(ui.Select):
 
     def __init__(self):
-
         options = [
-
             discord.SelectOption(
                 label="Klatki",
                 description="Pomoc związana z klatkami",
                 value="klatki"
             ),
-
             discord.SelectOption(
                 label="Rekrutacja",
                 description="Złóż podanie do Ponny",
                 value="rekrutacja"
             ),
-
             discord.SelectOption(
                 label="Inne",
                 description="Pozostałe sprawy",
                 value="inne"
             )
-
         ]
 
         super().__init__(
@@ -422,36 +294,23 @@ class TicketSelect(ui.Select):
             custom_id="ticket_category_select"
         )
 
-    async def callback(
-        self,
-        interaction: discord.Interaction
-    ):
-
+    async def callback(self, interaction: discord.Interaction):
         ticket_type = self.values[0]
 
-        # =================================================
-        # REKRUTACJA -> MODAL
-        # =================================================
-
+        # Ważne: send_modal musi być pierwszą odpowiedzią
+        # na tę interakcję. Nie wolno tutaj wcześniej robić
+        # defer() ani send_message().
         if ticket_type == "rekrutacja":
-
             try:
-
                 await interaction.response.send_modal(
                     RecruitmentModal()
                 )
-
             except discord.HTTPException as e:
+                print(f"[MODAL ERROR] {e}")
 
-                print(
-                    f"[RECRUITMENT MODAL ERROR] {e}"
-                )
-
+                # Jeśli Discord zwróci 429, nie próbujemy
+                # odpowiadać drugi raz przez interaction.response.
             return
-
-        # =================================================
-        # KLATKI / INNE
-        # =================================================
 
         await create_ticket(
             interaction,
@@ -459,37 +318,16 @@ class TicketSelect(ui.Select):
         )
 
 
-# =========================================================
-# PANEL
-# =========================================================
-
 class TicketPanelView(ui.LayoutView):
 
     def __init__(self):
-
-        super().__init__(
-            timeout=None
-        )
+        super().__init__(timeout=None)
 
         container = ui.Container()
 
-        # =================================================
-        # ZDJĘCIE
-        # =================================================
-
         gallery = ui.MediaGallery()
-
-        gallery.add_item(
-            media=PANEL_IMAGE_URL
-        )
-
-        container.add_item(
-            gallery
-        )
-
-        # =================================================
-        # TEKST
-        # =================================================
+        gallery.add_item(media=PANEL_IMAGE_URL)
+        container.add_item(gallery)
 
         container.add_item(
             ui.TextDisplay(
@@ -502,33 +340,18 @@ class TicketPanelView(ui.LayoutView):
             )
         )
 
-        # =================================================
-        # SELECT
-        # =================================================
-
         select_row = ui.ActionRow()
+        select_row.add_item(TicketSelect())
+        container.add_item(select_row)
 
-        select_row.add_item(
-            TicketSelect()
-        )
-
-        container.add_item(
-            select_row
-        )
-
-        self.add_item(
-            container
-        )
+        self.add_item(container)
 
 
 # =========================================================
 # MODAL REKRUTACJI
 # =========================================================
 
-class RecruitmentModal(
-    ui.Modal,
-    title="Rekrutacja"
-):
+class RecruitmentModal(ui.Modal, title="Rekrutacja"):
 
     age = ui.TextInput(
         label="Ile masz lat",
@@ -566,10 +389,13 @@ class RecruitmentModal(
         max_length=500
     )
 
-    async def on_submit(
-        self,
-        interaction: discord.Interaction
-    ):
+    async def on_submit(self, interaction: discord.Interaction):
+        if interaction.guild is None:
+            await safe_ephemeral(
+                interaction,
+                "Nie można utworzyć ticketu poza serwerem."
+            )
+            return
 
         existing = await user_has_open_ticket(
             interaction.guild,
@@ -577,22 +403,18 @@ class RecruitmentModal(
         )
 
         if existing:
-
-            await interaction.response.send_message(
-                f"Masz już otwarty ticket: {existing.mention}",
-                ephemeral=True
+            await safe_ephemeral(
+                interaction,
+                f"Masz już otwarty ticket: {existing.mention}"
             )
-
             return
 
         answers = {
-
             "age": self.age.value,
             "name": self.name.value,
             "minecraft": self.minecraft.value,
             "pvp": self.pvp.value,
             "why": self.why.value
-
         }
 
         await create_ticket_after_recruitment(
@@ -603,12 +425,9 @@ class RecruitmentModal(
 
 # =========================================================
 # PANEL W TICKETACH
-# COMPONENTS V2
 # =========================================================
 
-class TicketActionView(
-    ui.LayoutView
-):
+class TicketActionView(ui.LayoutView):
 
     def __init__(
         self,
@@ -617,64 +436,36 @@ class TicketActionView(
         category_name: str,
         recruitment_answers=None
     ):
-
-        super().__init__(
-            timeout=None
-        )
+        super().__init__(timeout=None)
 
         container = ui.Container()
 
-        # =================================================
-        # ZDJĘCIE
-        # =================================================
-
         gallery = ui.MediaGallery()
-
-        gallery.add_item(
-            media=TICKET_IMAGE_URL
-        )
-
-        container.add_item(
-            gallery
-        )
-
-        # =================================================
-        # NAGŁÓWEK
-        # =================================================
+        gallery.add_item(media=TICKET_IMAGE_URL)
+        container.add_item(gallery)
 
         container.add_item(
             ui.TextDisplay(
-                content=(
-                    f"## **{owner_mention} × {category_name}**"
-                )
+                content=f"## **{owner_mention} × {category_name}**"
             )
         )
 
-        # =================================================
-        # TREŚĆ
-        # =================================================
-
         if ticket_type == "klatki":
-
-            content = (
-                f"{ARROW} Czekaj na odpowiedz Liderów"
-            )
+            content = f"{ARROW} Czekaj na odpowiedź Liderów"
 
         elif ticket_type == "rekrutacja":
-
             a = recruitment_answers or {}
 
             content = (
                 f"{PONNY} **Odpowiedzi:**\n\n"
                 f"{ARROW} **Wiek:** {a.get('age', '-')}\n"
-                f"{ARROW} **Imie:** {a.get('name', '-')}\n"
+                f"{ARROW} **Imię:** {a.get('name', '-')}\n"
                 f"{ARROW} **Nick Minecraft:** {a.get('minecraft', '-')}\n"
                 f"{ARROW} **Twoje Pvp:** {a.get('pvp', '-')}\n"
                 f"{ARROW} **Dlaczego Ponny:** {a.get('why', '-')}"
             )
 
         else:
-
             content = (
                 f"{ARROW} Opisz dokładnie swoją sprawę. "
                 "Osoba z supportu zajmie się Twoim zgłoszeniem "
@@ -682,53 +473,27 @@ class TicketActionView(
             )
 
         container.add_item(
-            ui.TextDisplay(
-                content=content
-            )
+            ui.TextDisplay(content=content)
         )
-
-        # =================================================
-        # PRZYCISKI
-        # =================================================
 
         row = ui.ActionRow()
 
-        row.add_item(
-            CloseTicketButton(
-                ticket_type
-            )
-        )
+        row.add_item(CloseTicketButton(ticket_type))
+        row.add_item(AddPersonButton())
+        row.add_item(RemovePersonButton())
 
-        row.add_item(
-            AddPersonButton()
-        )
+        container.add_item(row)
 
-        row.add_item(
-            RemovePersonButton()
-        )
-
-        container.add_item(
-            row
-        )
-
-        self.add_item(
-            container
-        )
+        self.add_item(container)
 
 
 # =========================================================
 # ZAMKNIJ TICKET
 # =========================================================
 
-class CloseTicketButton(
-    ui.Button
-):
+class CloseTicketButton(ui.Button):
 
-    def __init__(
-        self,
-        ticket_type
-    ):
-
+    def __init__(self, ticket_type):
         super().__init__(
             label="ᴢᴀᴍᴋɴɪᴊ ᴛɪᴄᴋᴇᴛ",
             style=discord.ButtonStyle.secondary,
@@ -737,55 +502,38 @@ class CloseTicketButton(
 
         self.ticket_type = ticket_type
 
-    async def callback(
-        self,
-        interaction: discord.Interaction
-    ):
-
-        if not isinstance(
-            interaction.user,
-            discord.Member
-        ):
+    async def callback(self, interaction: discord.Interaction):
+        if not isinstance(interaction.user, discord.Member):
             return
 
         if not can_close_ticket(
             interaction.user,
             self.ticket_type
         ):
-
-            await interaction.response.send_message(
-                "Nie masz uprawnień do zamknięcia tego ticketu.",
-                ephemeral=True
+            await safe_ephemeral(
+                interaction,
+                "Nie masz uprawnień do zamknięcia tego ticketu."
             )
-
             return
 
-        await interaction.response.send_message(
-            "Czy na pewno chcesz zamknąć ten ticket?",
-            view=CloseConfirmView(
-                self.ticket_type
-            ),
-            ephemeral=True
-        )
+        try:
+            await interaction.response.send_message(
+                "Czy na pewno chcesz zamknąć ten ticket?",
+                view=CloseConfirmView(self.ticket_type),
+                ephemeral=True
+            )
+        except discord.HTTPException as e:
+            print(f"[CLOSE RESPONSE ERROR] {e}")
 
 
 # =========================================================
 # POTWIERDZENIE ZAMKNIĘCIA
 # =========================================================
 
-class CloseConfirmView(
-    ui.View
-):
+class CloseConfirmView(ui.View):
 
-    def __init__(
-        self,
-        ticket_type
-    ):
-
-        super().__init__(
-            timeout=60
-        )
-
+    def __init__(self, ticket_type):
+        super().__init__(timeout=60)
         self.ticket_type = ticket_type
 
     @ui.button(
@@ -797,78 +545,49 @@ class CloseConfirmView(
         interaction: discord.Interaction,
         button: ui.Button
     ):
-
-        if not isinstance(
-            interaction.user,
-            discord.Member
-        ):
+        if not isinstance(interaction.user, discord.Member):
             return
 
         if not can_close_ticket(
             interaction.user,
             self.ticket_type
         ):
-
-            await interaction.response.send_message(
-                "Nie masz uprawnień.",
-                ephemeral=True
+            await safe_ephemeral(
+                interaction,
+                "Nie masz uprawnień."
             )
-
             return
 
-        await interaction.response.edit_message(
-            content=(
-                "Ticket zostanie zamknięty "
-                "w przeciągu 10 sekund."
-            ),
-            view=None
-        )
+        try:
+            await interaction.response.edit_message(
+                content="Ticket zostanie zamknięty w przeciągu 10 sekund.",
+                view=None
+            )
+        except discord.HTTPException as e:
+            print(f"[CLOSE EDIT ERROR] {e}")
+            return
 
         channel = interaction.channel
 
         await asyncio.sleep(10)
 
-        if not isinstance(
-            channel,
-            discord.TextChannel
-        ):
+        if not isinstance(channel, discord.TextChannel):
             return
 
         try:
-
-            await create_transcript(
-                channel
-            )
-
+            await create_transcript(channel)
         except Exception as e:
-
-            print(
-                f"[TRANSCRIPT ERROR] {e}"
-            )
+            print(f"[TRANSCRIPT ERROR] {type(e).__name__}: {e}")
 
         try:
-
-            await send_owner_transcript_dm(
-                channel
-            )
-
+            await send_owner_transcript_dm(channel)
         except Exception as e:
-
-            print(
-                f"[DM ERROR] {e}"
-            )
+            print(f"[DM ERROR] {type(e).__name__}: {e}")
 
         try:
-
-            await channel.delete(
-                reason="Ticket zamknięty"
-            )
-
+            await channel.delete(reason="Ticket zamknięty")
         except Exception as e:
-
-            print(
-                f"[DELETE ERROR] {e}"
-            )
+            print(f"[DELETE ERROR] {type(e).__name__}: {e}")
 
     @ui.button(
         label="NIE",
@@ -879,21 +598,20 @@ class CloseConfirmView(
         interaction: discord.Interaction,
         button: ui.Button
     ):
-
-        await interaction.response.edit_message(
-            content="Zamykanie ticketu anulowane.",
-            view=None
-        )
+        try:
+            await interaction.response.edit_message(
+                content="Zamykanie ticketu anulowane.",
+                view=None
+            )
+        except discord.HTTPException as e:
+            print(f"[CANCEL ERROR] {e}")
 
 
 # =========================================================
-# DODAJ OSOBĘ - MODAL
+# DODAJ OSOBĘ
 # =========================================================
 
-class AddPersonModal(
-    ui.Modal,
-    title="Dodaj osobę"
-):
+class AddPersonModal(ui.Modal, title="Dodaj osobę"):
 
     member_id = ui.TextInput(
         label="ID użytkownika",
@@ -902,99 +620,70 @@ class AddPersonModal(
         max_length=25
     )
 
-    async def on_submit(
-        self,
-        interaction: discord.Interaction
-    ):
-
+    async def on_submit(self, interaction: discord.Interaction):
         channel = interaction.channel
 
-        if not isinstance(
-            channel,
-            discord.TextChannel
-        ):
+        if not isinstance(channel, discord.TextChannel):
             return
 
         try:
-
-            member_id = int(
-                self.member_id.value
-            )
-
+            member_id = int(self.member_id.value)
         except ValueError:
-
-            await interaction.response.send_message(
-                "Nieprawidłowe ID użytkownika.",
-                ephemeral=True
+            await safe_ephemeral(
+                interaction,
+                "Nieprawidłowe ID użytkownika."
             )
-
             return
 
-        member = interaction.guild.get_member(
-            member_id
-        )
+        member = interaction.guild.get_member(member_id)
 
         if not member:
-
             try:
-
-                member = await interaction.guild.fetch_member(
-                    member_id
-                )
-
-            except Exception:
-
+                member = await interaction.guild.fetch_member(member_id)
+            except discord.HTTPException:
                 member = None
 
         if not member:
-
-            await interaction.response.send_message(
-                "Nie znaleziono takiego użytkownika.",
-                ephemeral=True
+            await safe_ephemeral(
+                interaction,
+                "Nie znaleziono takiego użytkownika."
             )
-
             return
 
-        await channel.set_permissions(
-            member,
-            view_channel=True,
-            send_messages=True,
-            read_message_history=True,
-            attach_files=True,
-            embed_links=True
+        try:
+            await channel.set_permissions(
+                member,
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True,
+                attach_files=True,
+                embed_links=True
+            )
+        except discord.HTTPException as e:
+            print(f"[ADD PERSON ERROR] {e}")
+            await safe_ephemeral(
+                interaction,
+                "Nie udało się dodać użytkownika do ticketu."
+            )
+            return
+
+        await safe_ephemeral(
+            interaction,
+            f"Dodano {member.mention} do ticketu."
         )
 
-        await interaction.response.send_message(
-            f"Dodano {member.mention} do ticketu.",
-            ephemeral=True
-        )
 
-
-# =========================================================
-# DODAJ OSOBĘ - BUTTON
-# =========================================================
-
-class AddPersonButton(
-    ui.Button
-):
+class AddPersonButton(ui.Button):
 
     def __init__(self):
-
         super().__init__(
             label="ᴅᴏᴅᴀᴊ ᴏsᴏʙᴇ̨",
             style=discord.ButtonStyle.secondary,
             custom_id="ticket_add_person"
         )
 
-    async def callback(
-        self,
-        interaction: discord.Interaction
-    ):
-
-        if not isinstance(
-            interaction.user,
-            discord.Member
-        ):
+    async def callback(self, interaction: discord.Interaction):
+        if not isinstance(interaction.user, discord.Member):
             return
 
         ticket_type = get_ticket_type_from_channel(
@@ -1005,35 +694,25 @@ class AddPersonButton(
             interaction.user,
             ticket_type or "inne"
         ):
-
-            await interaction.response.send_message(
-                "Nie masz uprawnień do zarządzania tym ticketem.",
-                ephemeral=True
+            await safe_ephemeral(
+                interaction,
+                "Nie masz uprawnień do zarządzania tym ticketem."
             )
-
             return
 
         try:
-
             await interaction.response.send_modal(
                 AddPersonModal()
             )
-
         except discord.HTTPException as e:
-
-            print(
-                f"[ADD PERSON MODAL ERROR] {e}"
-            )
+            print(f"[ADD MODAL ERROR] {e}")
 
 
 # =========================================================
-# USUŃ OSOBĘ - MODAL
+# USUŃ OSOBĘ
 # =========================================================
 
-class RemovePersonModal(
-    ui.Modal,
-    title="Usuń osobę"
-):
+class RemovePersonModal(ui.Modal, title="Usuń osobę"):
 
     member_id = ui.TextInput(
         label="ID użytkownika",
@@ -1042,108 +721,75 @@ class RemovePersonModal(
         max_length=25
     )
 
-    async def on_submit(
-        self,
-        interaction: discord.Interaction
-    ):
-
+    async def on_submit(self, interaction: discord.Interaction):
         channel = interaction.channel
 
-        if not isinstance(
-            channel,
-            discord.TextChannel
-        ):
+        if not isinstance(channel, discord.TextChannel):
             return
 
         try:
-
-            member_id = int(
-                self.member_id.value
-            )
-
+            member_id = int(self.member_id.value)
         except ValueError:
-
-            await interaction.response.send_message(
-                "Nieprawidłowe ID użytkownika.",
-                ephemeral=True
+            await safe_ephemeral(
+                interaction,
+                "Nieprawidłowe ID użytkownika."
             )
-
             return
 
-        owner_id = get_ticket_owner_id(
-            channel
-        )
+        owner_id = get_ticket_owner_id(channel)
 
         if member_id == owner_id:
-
-            await interaction.response.send_message(
-                "Nie możesz usunąć właściciela ticketu.",
-                ephemeral=True
+            await safe_ephemeral(
+                interaction,
+                "Nie możesz usunąć właściciela ticketu."
             )
-
             return
 
-        member = interaction.guild.get_member(
-            member_id
-        )
+        member = interaction.guild.get_member(member_id)
 
         if not member:
-
             try:
-
-                member = await interaction.guild.fetch_member(
-                    member_id
-                )
-
-            except Exception:
-
+                member = await interaction.guild.fetch_member(member_id)
+            except discord.HTTPException:
                 member = None
 
         if not member:
-
-            await interaction.response.send_message(
-                "Nie znaleziono takiego użytkownika.",
-                ephemeral=True
+            await safe_ephemeral(
+                interaction,
+                "Nie znaleziono takiego użytkownika."
             )
-
             return
 
-        await channel.set_permissions(
-            member,
-            overwrite=None
+        try:
+            await channel.set_permissions(
+                member,
+                overwrite=None
+            )
+        except discord.HTTPException as e:
+            print(f"[REMOVE PERSON ERROR] {e}")
+            await safe_ephemeral(
+                interaction,
+                "Nie udało się usunąć użytkownika z ticketu."
+            )
+            return
+
+        await safe_ephemeral(
+            interaction,
+            f"Usunięto {member.mention} z ticketu."
         )
 
-        await interaction.response.send_message(
-            f"Usunięto {member.mention} z ticketu.",
-            ephemeral=True
-        )
 
-
-# =========================================================
-# USUŃ OSOBĘ - BUTTON
-# =========================================================
-
-class RemovePersonButton(
-    ui.Button
-):
+class RemovePersonButton(ui.Button):
 
     def __init__(self):
-
         super().__init__(
             label="ᴜsᴜɴ́ ᴏsᴏʙᴇ̨",
             style=discord.ButtonStyle.secondary,
             custom_id="ticket_remove_person"
         )
 
-    async def callback(
-        self,
-        interaction: discord.Interaction
-    ):
-
-        if not isinstance(
-            interaction.user,
-            discord.Member
-        ):
+    async def callback(self, interaction: discord.Interaction):
+        if not isinstance(interaction.user, discord.Member):
             return
 
         ticket_type = get_ticket_type_from_channel(
@@ -1154,25 +800,75 @@ class RemovePersonButton(
             interaction.user,
             ticket_type or "inne"
         ):
-
-            await interaction.response.send_message(
-                "Nie masz uprawnień do zarządzania tym ticketem.",
-                ephemeral=True
+            await safe_ephemeral(
+                interaction,
+                "Nie masz uprawnień do zarządzania tym ticketem."
             )
-
             return
 
         try:
-
             await interaction.response.send_modal(
                 RemovePersonModal()
             )
-
         except discord.HTTPException as e:
+            print(f"[REMOVE MODAL ERROR] {e}")
 
-            print(
-                f"[REMOVE PERSON MODAL ERROR] {e}"
-            )
+
+# =========================================================
+# TWORZENIE UPRAWNIEŃ
+# =========================================================
+
+def build_ticket_overwrites(
+    guild: discord.Guild,
+    member: discord.Member,
+    ticket_type: str
+):
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(
+            view_channel=False
+        ),
+
+        member: discord.PermissionOverwrite(
+            view_channel=True,
+            send_messages=True,
+            read_message_history=True,
+            attach_files=True,
+            embed_links=True
+        )
+    }
+
+    support_permissions = discord.PermissionOverwrite(
+        view_channel=True,
+        send_messages=True,
+        read_message_history=True,
+        manage_messages=True,
+        attach_files=True,
+        embed_links=True
+    )
+
+    universal_role = guild.get_role(
+        UNIVERSAL_SUPPORT_ROLE_ID
+    )
+
+    if universal_role:
+        overwrites[universal_role] = support_permissions
+
+    general_role = guild.get_role(
+        GENERAL_SUPPORT_ROLE_ID
+    )
+
+    if general_role:
+        overwrites[general_role] = support_permissions
+
+    if ticket_type == "rekrutacja":
+        recruitment_role = guild.get_role(
+            RECRUITMENT_ROLE_ID
+        )
+
+        if recruitment_role:
+            overwrites[recruitment_role] = support_permissions
+
+    return overwrites
 
 
 # =========================================================
@@ -1183,7 +879,6 @@ async def create_ticket(
     interaction: discord.Interaction,
     ticket_type: str
 ):
-
     guild = interaction.guild
 
     if guild is None:
@@ -1195,164 +890,82 @@ async def create_ticket(
     )
 
     if existing:
-
-        await interaction.response.send_message(
-            f"Masz już otwarty ticket: {existing.mention}",
-            ephemeral=True
+        await safe_ephemeral(
+            interaction,
+            f"Masz już otwarty ticket: {existing.mention}"
         )
-
         return
 
     category = guild.get_channel(
         TICKET_CATEGORY_ID
     )
 
-    if not isinstance(
-        category,
-        discord.CategoryChannel
-    ):
-
-        await interaction.response.send_message(
-            "Nie znaleziono kategorii ticketów.",
-            ephemeral=True
+    if not isinstance(category, discord.CategoryChannel):
+        await safe_ephemeral(
+            interaction,
+            "Nie znaleziono kategorii ticketów."
         )
-
         return
 
     member = interaction.user
 
-    overwrites = {
-
-        guild.default_role:
-            discord.PermissionOverwrite(
-                view_channel=False
-            ),
-
-        member:
-            discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                read_message_history=True,
-                attach_files=True,
-                embed_links=True
-            )
-
-    }
-
-    # =====================================================
-    # UNIVERSAL SUPPORT
-    # =====================================================
-
-    universal_role = guild.get_role(
-        UNIVERSAL_SUPPORT_ROLE_ID
+    overwrites = build_ticket_overwrites(
+        guild,
+        member,
+        ticket_type
     )
-
-    if universal_role:
-
-        overwrites[universal_role] = (
-            discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                read_message_history=True,
-                manage_messages=True,
-                attach_files=True,
-                embed_links=True
-            )
-        )
-
-    # =====================================================
-    # GENERAL SUPPORT
-    # =====================================================
-
-    general_role = guild.get_role(
-        GENERAL_SUPPORT_ROLE_ID
-    )
-
-    if general_role:
-
-        overwrites[general_role] = (
-            discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                read_message_history=True,
-                manage_messages=True,
-                attach_files=True,
-                embed_links=True
-            )
-        )
-
-    # =====================================================
-    # REKRUTACJA
-    # =====================================================
-
-    if ticket_type == "rekrutacja":
-
-        recruitment_role = guild.get_role(
-            RECRUITMENT_ROLE_ID
-        )
-
-        if recruitment_role:
-
-            overwrites[recruitment_role] = (
-                discord.PermissionOverwrite(
-                    view_channel=True,
-                    send_messages=True,
-                    read_message_history=True,
-                    manage_messages=True,
-                    attach_files=True,
-                    embed_links=True
-                )
-            )
 
     topic = (
         f"ticket_type={ticket_type}"
         f"|owner_id={member.id}"
     )
 
-    channel = await guild.create_text_channel(
-        name=ticket_name(
-            member,
-            ticket_type
-        ),
-        category=category,
-        overwrites=overwrites,
-        topic=topic,
-        reason="Utworzenie ticketu"
-    )
-
-    await interaction.response.send_message(
-        f"Ticket został utworzony: {channel.mention}",
-        ephemeral=True
-    )
-
-    # =====================================================
-    # PING TYLKO WŁAŚCICIELA
-    # =====================================================
-
-    await channel.send(
-        content=member.mention,
-        allowed_mentions=discord.AllowedMentions(
-            users=True,
-            roles=False,
-            everyone=False
+    try:
+        channel = await guild.create_text_channel(
+            name=ticket_name(member, ticket_type),
+            category=category,
+            overwrites=overwrites,
+            topic=topic,
+            reason="Utworzenie ticketu"
         )
-    )
-
-    category_names = {
-
-        "klatki": "Klatki",
-        "rekrutacja": "Rekrutacja",
-        "inne": "Inne"
-
-    }
-
-    await channel.send(
-        view=TicketActionView(
-            ticket_type=ticket_type,
-            owner_mention=member.mention,
-            category_name=category_names[ticket_type]
+    except discord.HTTPException as e:
+        print(f"[CREATE TICKET ERROR] {e}")
+        await safe_ephemeral(
+            interaction,
+            "Nie udało się utworzyć ticketu. Spróbuj ponownie za chwilę."
         )
+        return
+
+    await safe_ephemeral(
+        interaction,
+        f"Ticket został utworzony: {channel.mention}"
     )
+
+    try:
+        await channel.send(
+            content=member.mention,
+            allowed_mentions=discord.AllowedMentions(
+                users=True,
+                roles=False,
+                everyone=False
+            )
+        )
+
+        category_names = {
+            "klatki": "Klatki",
+            "rekrutacja": "Rekrutacja",
+            "inne": "Inne"
+        }
+
+        await channel.send(
+            view=TicketActionView(
+                ticket_type=ticket_type,
+                owner_mention=member.mention,
+                category_name=category_names[ticket_type]
+            )
+        )
+    except discord.HTTPException as e:
+        print(f"[TICKET MESSAGE ERROR] {e}")
 
 
 # =========================================================
@@ -1363,7 +976,6 @@ async def create_ticket_after_recruitment(
     interaction: discord.Interaction,
     answers: dict
 ):
-
     guild = interaction.guild
 
     if guild is None:
@@ -1375,165 +987,84 @@ async def create_ticket_after_recruitment(
     )
 
     if existing:
-
-        await interaction.response.send_message(
-            f"Masz już otwarty ticket: {existing.mention}",
-            ephemeral=True
+        await safe_ephemeral(
+            interaction,
+            f"Masz już otwarty ticket: {existing.mention}"
         )
-
         return
 
     category = guild.get_channel(
         TICKET_CATEGORY_ID
     )
 
-    if not isinstance(
-        category,
-        discord.CategoryChannel
-    ):
-
-        await interaction.response.send_message(
-            "Nie znaleziono kategorii ticketów.",
-            ephemeral=True
+    if not isinstance(category, discord.CategoryChannel):
+        await safe_ephemeral(
+            interaction,
+            "Nie znaleziono kategorii ticketów."
         )
-
         return
 
     member = interaction.user
 
-    overwrites = {
-
-        guild.default_role:
-            discord.PermissionOverwrite(
-                view_channel=False
-            ),
-
-        member:
-            discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                read_message_history=True,
-                attach_files=True,
-                embed_links=True
-            )
-
-    }
-
-    # =====================================================
-    # UNIVERSAL SUPPORT
-    # =====================================================
-
-    universal_role = guild.get_role(
-        UNIVERSAL_SUPPORT_ROLE_ID
+    overwrites = build_ticket_overwrites(
+        guild,
+        member,
+        "rekrutacja"
     )
-
-    if universal_role:
-
-        overwrites[universal_role] = (
-            discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                read_message_history=True,
-                manage_messages=True,
-                attach_files=True,
-                embed_links=True
-            )
-        )
-
-    # =====================================================
-    # GENERAL SUPPORT
-    # =====================================================
-
-    general_role = guild.get_role(
-        GENERAL_SUPPORT_ROLE_ID
-    )
-
-    if general_role:
-
-        overwrites[general_role] = (
-            discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                read_message_history=True,
-                manage_messages=True,
-                attach_files=True,
-                embed_links=True
-            )
-        )
-
-    # =====================================================
-    # RECRUITMENT SUPPORT
-    # =====================================================
-
-    recruitment_role = guild.get_role(
-        RECRUITMENT_ROLE_ID
-    )
-
-    if recruitment_role:
-
-        overwrites[recruitment_role] = (
-            discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                read_message_history=True,
-                manage_messages=True,
-                attach_files=True,
-                embed_links=True
-            )
-        )
 
     topic = (
         "ticket_type=rekrutacja"
         f"|owner_id={member.id}"
     )
 
-    channel = await guild.create_text_channel(
-        name=ticket_name(
-            member,
-            "rekrutacja"
-        ),
-        category=category,
-        overwrites=overwrites,
-        topic=topic,
-        reason="Utworzenie ticketu rekrutacyjnego"
-    )
-
-    await interaction.response.send_message(
-        f"Ticket rekrutacyjny został utworzony: {channel.mention}",
-        ephemeral=True
-    )
-
-    # =====================================================
-    # PING TYLKO UŻYTKOWNIKA
-    # =====================================================
-
-    await channel.send(
-        content=member.mention,
-        allowed_mentions=discord.AllowedMentions(
-            users=True,
-            roles=False,
-            everyone=False
+    try:
+        channel = await guild.create_text_channel(
+            name=ticket_name(member, "rekrutacja"),
+            category=category,
+            overwrites=overwrites,
+            topic=topic,
+            reason="Utworzenie ticketu rekrutacyjnego"
         )
+    except discord.HTTPException as e:
+        print(f"[CREATE RECRUITMENT ERROR] {e}")
+        await safe_ephemeral(
+            interaction,
+            "Nie udało się utworzyć ticketu rekrutacyjnego."
+        )
+        return
+
+    await safe_ephemeral(
+        interaction,
+        f"Ticket rekrutacyjny został utworzony: {channel.mention}"
     )
 
-    await channel.send(
-        view=TicketActionView(
-            ticket_type="rekrutacja",
-            owner_mention=member.mention,
-            category_name="Rekrutacja",
-            recruitment_answers=answers
+    try:
+        await channel.send(
+            content=member.mention,
+            allowed_mentions=discord.AllowedMentions(
+                users=True,
+                roles=False,
+                everyone=False
+            )
         )
-    )
+
+        await channel.send(
+            view=TicketActionView(
+                ticket_type="rekrutacja",
+                owner_mention=member.mention,
+                category_name="Rekrutacja",
+                recruitment_answers=answers
+            )
+        )
+    except discord.HTTPException as e:
+        print(f"[RECRUITMENT MESSAGE ERROR] {e}")
 
 
 # =========================================================
 # TRANSCRIPT
 # =========================================================
 
-async def create_transcript(
-    channel: discord.TextChannel
-):
-
+async def create_transcript(channel: discord.TextChannel):
     transcript_channel = channel.guild.get_channel(
         TRANSCRIPT_CHANNEL_ID
     )
@@ -1542,6 +1073,7 @@ async def create_transcript(
         transcript_channel,
         discord.TextChannel
     ):
+        print("[TRANSCRIPT] Nie znaleziono kanału transcriptów.")
         return None
 
     messages = []
@@ -1550,42 +1082,31 @@ async def create_transcript(
         limit=None,
         oldest_first=True
     ):
+        messages.append(message)
 
-        messages.append(
-            message
-        )
-
-    owner_id = get_ticket_owner_id(
-        channel
-    )
-
-    ticket_type = get_ticket_type_from_channel(
-        channel
-    )
+    owner_id = get_ticket_owner_id(channel)
+    ticket_type = get_ticket_type_from_channel(channel)
 
     owner = None
 
     if owner_id:
+        owner = channel.guild.get_member(owner_id)
 
-        owner = channel.guild.get_member(
-            owner_id
-        )
+        if owner is None:
+            try:
+                owner = await channel.guild.fetch_member(owner_id)
+            except discord.HTTPException:
+                owner = None
 
     ticket_type_name = {
-
         "klatki": "Klatki",
         "rekrutacja": "Rekrutacja",
         "inne": "Inne"
-
-    }.get(
-        ticket_type,
-        "Ticket"
-    )
+    }.get(ticket_type, "Ticket")
 
     rows = []
 
     for message in messages:
-
         timestamp = message.created_at.strftime(
             "%d.%m.%Y %H:%M"
         )
@@ -1595,22 +1116,18 @@ async def create_transcript(
         )
 
         author_avatar = (
-            message.author.display_avatar.url
+            str(message.author.display_avatar.url)
             if message.author.display_avatar
             else ""
         )
 
         content = html.escape(
             message.content or ""
-        ).replace(
-            "\n",
-            "<br>"
-        )
+        ).replace("\n", "<br>")
 
         attachments_html = ""
 
         for attachment in message.attachments:
-
             url = html.escape(
                 attachment.url,
                 quote=True
@@ -1621,81 +1138,73 @@ async def create_transcript(
             )
 
             attachments_html += (
-                f'<div class="attachment">'
+                '<div class="attachment">'
                 f'<a href="{url}" target="_blank">'
                 f'📎 {filename}'
-                f'</a>'
-                f'</div>'
+                '</a>'
+                '</div>'
             )
 
         embeds_html = ""
 
         for embed in message.embeds:
-
             embed_parts = []
 
             if embed.title:
-
                 embed_parts.append(
-                    f'<div class="embed-title">'
+                    '<div class="embed-title">'
                     f'{html.escape(embed.title)}'
-                    f'</div>'
+                    '</div>'
                 )
 
             if embed.description:
-
                 embed_parts.append(
-                    f'<div class="embed-description">'
+                    '<div class="embed-description">'
                     f'{html.escape(embed.description)}'
-                    f'</div>'
+                    '</div>'
                 )
 
             for field in embed.fields:
-
                 embed_parts.append(
-                    f'<div class="embed-field">'
+                    '<div class="embed-field">'
                     f'<strong>{html.escape(field.name)}</strong>'
-                    f'<br>'
+                    '<br>'
                     f'{html.escape(field.value)}'
-                    f'</div>'
+                    '</div>'
                 )
 
-            if embed.author and embed.author.name:
+            embed_html = '<div class="discord-embed">'
 
-                embeds_html += (
+            if embed.author and embed.author.name:
+                embed_html += (
                     '<div class="embed-author">'
                     f'{html.escape(embed.author.name)}'
                     '</div>'
                 )
 
-            embeds_html += (
-                '<div class="discord-embed">'
-                + "".join(embed_parts)
-            )
+            embed_html += "".join(embed_parts)
 
             if embed.image and embed.image.url:
-
-                embeds_html += (
-                    f'<img class="embed-image" '
+                embed_html += (
+                    '<img class="embed-image" '
                     f'src="{html.escape(embed.image.url, quote=True)}">'
                 )
 
             if embed.thumbnail and embed.thumbnail.url:
-
-                embeds_html += (
-                    f'<img class="embed-thumbnail" '
+                embed_html += (
+                    '<img class="embed-thumbnail" '
                     f'src="{html.escape(embed.thumbnail.url, quote=True)}">'
                 )
 
             if embed.footer and embed.footer.text:
-
-                embeds_html += (
+                embed_html += (
                     '<div class="embed-footer">'
                     f'{html.escape(embed.footer.text)}'
                     '</div>'
                 )
 
-            embeds_html += "</div>"
+            embed_html += "</div>"
+            embeds_html += embed_html
 
         rows.append(
             f"""
@@ -1703,17 +1212,9 @@ async def create_transcript(
                 <img class="avatar" src="{html.escape(author_avatar, quote=True)}">
 
                 <div class="message-content">
-
                     <div class="message-header">
-
-                        <span class="author">
-                            {author_name}
-                        </span>
-
-                        <span class="time">
-                            {timestamp}
-                        </span>
-
+                        <span class="author">{author_name}</span>
+                        <span class="time">{timestamp}</span>
                     </div>
 
                     <div class="text">
@@ -1721,9 +1222,7 @@ async def create_transcript(
                     </div>
 
                     {attachments_html}
-
                     {embeds_html}
-
                 </div>
             </div>
             """
@@ -1745,22 +1244,13 @@ async def create_transcript(
 
     transcript_html = f"""
 <!DOCTYPE html>
-
 <html lang="pl">
-
 <head>
-
 <meta charset="UTF-8">
-
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
-
-<title>
-Transcript - {html.escape(channel.name)}
-</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transcript - {html.escape(channel.name)}</title>
 
 <style>
-
 * {{
     box-sizing: border-box;
 }}
@@ -1792,33 +1282,26 @@ body {{
 }}
 
 @keyframes rotate {{
-
     from {{
         transform: rotate(0deg);
     }}
-
     to {{
         transform: rotate(360deg);
     }}
-
 }}
 
 @keyframes fadeOut {{
-
     0% {{
         opacity: 1;
         visibility: visible;
     }}
-
     70% {{
         opacity: 1;
     }}
-
     100% {{
         opacity: 0;
         visibility: hidden;
     }}
-
 }}
 
 .header {{
@@ -1946,109 +1429,79 @@ body {{
     background: #15151d;
     border-radius: 12px;
 }}
-
 </style>
-
 </head>
 
 <body>
 
 <div class="loader">
-
-    <img src="{TRANSCRIPT_LOADING_IMAGE}">
-
+    <img src="{html.escape(TRANSCRIPT_LOADING_IMAGE, quote=True)}">
 </div>
 
 <div class="header">
-
-    <h1>
-        Transcript — {html.escape(channel.name)}
-    </h1>
-
-    <p>
-        Ticket: {html.escape(ticket_type_name)}
-    </p>
-
+    <h1>Transcript — {html.escape(channel.name)}</h1>
+    <p>Ticket: {html.escape(ticket_type_name)}</p>
 </div>
 
 <div class="info">
-
     <strong>Właściciel:</strong>
     {html.escape(owner_display)}
-
     <br>
-
     <strong>Utworzono:</strong>
     {created_at}
-
     <br>
-
     <strong>Zamknięto:</strong>
     {closed_at}
-
 </div>
 
 <div class="messages">
-
     {''.join(rows)}
-
 </div>
 
 </body>
-
 </html>
 """
 
     safe_channel_name = "".join(
-        c
-        if c.isalnum() or c in "-_"
-        else "_"
+        c if c.isalnum() or c in "-_" else "_"
         for c in channel.name
     )
 
-    filename = (
-        f"transcript-{safe_channel_name}.html"
-    )
+    filename = f"transcript-{safe_channel_name}.html"
 
-    os.makedirs(
-        "transcripts",
-        exist_ok=True
-    )
+    os.makedirs("transcripts", exist_ok=True)
 
     filepath = os.path.join(
         "transcripts",
         filename
     )
 
-    with open(
-        filepath,
-        "w",
-        encoding="utf-8"
-    ) as f:
-
-        f.write(
-            transcript_html
-        )
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(transcript_html)
 
     file = discord.File(
         filepath,
         filename=filename
     )
 
-    message = await transcript_channel.send(
-        content=(
-            f"📄 **Transcript:** `{channel.name}`\n"
-            f"👤 **Właściciel:** "
-            f"{owner.mention if owner else owner_display}\n"
-            f"📁 **Kategoria:** {ticket_type_name}"
-        ),
-        file=file,
-        allowed_mentions=discord.AllowedMentions(
-            users=True,
-            roles=False,
-            everyone=False
+    try:
+        message = await transcript_channel.send(
+            content=(
+                f"📄 **Transcript:** `{channel.name}`\n"
+                f"👤 **Właściciel:** "
+                f"{owner.mention if owner else owner_display}\n"
+                f"📁 **Kategoria:** {ticket_type_name}"
+            ),
+            file=file,
+            allowed_mentions=discord.AllowedMentions(
+                users=True,
+                roles=False,
+                everyone=False
+            )
         )
-    )
+    except discord.HTTPException as e:
+        print(f"[TRANSCRIPT SEND ERROR] {e}")
+        return None
 
     return message, filepath
 
@@ -2057,18 +1510,10 @@ body {{
 # TRANSCRIPT DOWNLOAD
 # =========================================================
 
-class TranscriptDownloadView(
-    discord.ui.View
-):
+class TranscriptDownloadView(discord.ui.View):
 
-    def __init__(
-        self,
-        url: str
-    ):
-
-        super().__init__(
-            timeout=None
-        )
+    def __init__(self, url: str):
+        super().__init__(timeout=None)
 
         self.add_item(
             discord.ui.Button(
@@ -2082,31 +1527,20 @@ class TranscriptDownloadView(
 async def send_owner_transcript_dm(
     channel: discord.TextChannel
 ):
-
-    owner_id = get_ticket_owner_id(
-        channel
-    )
+    owner_id = get_ticket_owner_id(channel)
 
     if not owner_id:
         return
 
-    owner = channel.guild.get_member(
-        owner_id
-    )
+    owner = channel.guild.get_member(owner_id)
 
-    if not owner:
-
+    if owner is None:
         try:
-
-            owner = await channel.guild.fetch_member(
-                owner_id
-            )
-
-        except Exception:
-
+            owner = await channel.guild.fetch_member(owner_id)
+        except discord.HTTPException:
             return
 
-    if not owner:
+    if owner is None:
         return
 
     transcript_channel = channel.guild.get_channel(
@@ -2121,37 +1555,30 @@ async def send_owner_transcript_dm(
 
     messages = [
         message
-        async for message
-        in transcript_channel.history(
-            limit=20
-        )
+        async for message in transcript_channel.history(limit=20)
     ]
 
     transcript_message = None
 
     for message in messages:
-
         if (
             bot.user
             and message.author.id == bot.user.id
             and message.attachments
+            and channel.name in message.content
         ):
+            transcript_message = message
+            break
 
-            if channel.name in message.content:
-
-                transcript_message = message
-
-                break
-
-    if not transcript_message:
+    if transcript_message is None:
+        print(
+            f"[DM] Nie znaleziono transcriptu dla {channel.name}"
+        )
         return
 
-    attachment = (
-        transcript_message.attachments[0]
-    )
+    attachment = transcript_message.attachments[0]
 
     try:
-
         await owner.send(
             content=(
                 "💗 **Twój ticket został zamknięty.**\n\n"
@@ -2161,29 +1588,21 @@ async def send_owner_transcript_dm(
                 attachment.url
             )
         )
-
     except discord.Forbidden:
-
         print(
-            f"Nie można wysłać DM do {owner}."
+            f"[DM] Nie można wysłać DM do {owner}."
         )
-
     except discord.HTTPException as e:
-
         print(
-            f"[DM HTTP ERROR] {e}"
+            f"[DM ERROR] {e}"
         )
 
 
 # =========================================================
 # POWITANIA
-# COMPONENTS V2
 # =========================================================
 
-async def send_welcome(
-    member: discord.Member
-):
-
+async def send_welcome(member: discord.Member):
     channel = member.guild.get_channel(
         WELCOME_CHANNEL_ID
     )
@@ -2192,68 +1611,33 @@ async def send_welcome(
         channel,
         discord.TextChannel
     ):
-
         print(
             f"[WELCOME] Nie znaleziono kanału "
             f"{WELCOME_CHANNEL_ID}"
         )
-
         return
-
-    # =====================================================
-    # CONTAINER
-    # =====================================================
 
     container = ui.Container()
 
-    # =====================================================
-    # ZDJĘCIE
-    # =====================================================
-
     gallery = ui.MediaGallery()
+    gallery.add_item(media=WELCOME_IMAGE_URL)
+    container.add_item(gallery)
 
-    gallery.add_item(
-        media=WELCOME_IMAGE_URL
-    )
-
-    container.add_item(
-        gallery
-    )
-
-    # =====================================================
-    # POWITANIE
-    # =====================================================
-
-    member_count = member.guild.member_count
+    member_count = member.guild.member_count or 0
 
     welcome_text = (
         "# ```🦄 GILDIA PONNY × WITAMY```\n"
         f"> {ARROW} Witaj {member.mention}\n"
-        f"> {ARROW} Jestes **{member_count}** na naszym serwrze\n\n"
+        f"> {ARROW} Jesteś **{member_count}** na naszym serwerze\n\n"
         f"> {ARROW} Mamy nadzieję, że zostaniesz z nami na dłużej."
     )
 
     container.add_item(
-        ui.TextDisplay(
-            content=welcome_text
-        )
+        ui.TextDisplay(content=welcome_text)
     )
 
-    # =====================================================
-    # VIEW
-    # =====================================================
-
-    view = ui.LayoutView(
-        timeout=None
-    )
-
-    view.add_item(
-        container
-    )
-
-    # =====================================================
-    # WYSYŁKA
-    # =====================================================
+    view = ui.LayoutView(timeout=None)
+    view.add_item(container)
 
     await channel.send(
         view=view,
@@ -2270,26 +1654,12 @@ async def send_welcome(
 # =========================================================
 
 @bot.event
-async def on_member_join(
-    member: discord.Member
-):
-
+async def on_member_join(member: discord.Member):
     try:
-
-        await send_welcome(
-            member
-        )
-
-    except discord.HTTPException as e:
-
-        print(
-            f"[WELCOME HTTP ERROR] {e}"
-        )
-
+        await send_welcome(member)
     except Exception as e:
-
         print(
-            f"[WELCOME ERROR] {e}"
+            f"[WELCOME ERROR] {type(e).__name__}: {e}"
         )
 
 
@@ -2298,91 +1668,150 @@ async def on_member_join(
 # =========================================================
 
 async def ensure_ticket_panel():
-
-    channel = bot.get_channel(
-        TICKET_PANEL_CHANNEL_ID
-    )
-
-    if not isinstance(
-        channel,
-        discord.TextChannel
-    ):
-
-        print(
-            "[TICKET PANEL] Nie znaleziono kanału."
+    async with panel_lock:
+        channel = bot.get_channel(
+            TICKET_PANEL_CHANNEL_ID
         )
 
-        return
-
-    saved_id = load_panel_message_id()
-
-    # =====================================================
-    # JEŻELI PANEL JEST ZAPISANY
-    # =====================================================
-
-    if saved_id:
-
-        try:
-
-            message = await channel.fetch_message(
-                saved_id
+        if not isinstance(
+            channel,
+            discord.TextChannel
+        ):
+            print(
+                "[TICKET PANEL] Nie znaleziono kanału."
             )
+            return
 
-            if (
-                message
-                and bot.user
-                and message.author.id == bot.user.id
-            ):
+        saved_id = load_panel_message_id()
 
-                print(
-                    "[TICKET PANEL] Panel już istnieje."
+        if saved_id:
+            try:
+                message = await channel.fetch_message(
+                    saved_id
                 )
 
+                if (
+                    message
+                    and bot.user
+                    and message.author.id == bot.user.id
+                ):
+                    print(
+                        "[TICKET PANEL] Panel już istnieje."
+                    )
+                    return
+
+            except discord.NotFound:
+                pass
+
+            except discord.HTTPException as e:
+                print(
+                    f"[TICKET PANEL] Błąd sprawdzania panelu: {e}"
+                )
                 return
 
-        except discord.NotFound:
-
-            print(
-                "[TICKET PANEL] Stary panel nie istnieje."
+        # Jeżeli panelu nie ma, tworzymy dokładnie jeden.
+        try:
+            message = await channel.send(
+                view=TicketPanelView()
             )
 
-        except discord.Forbidden:
+            save_panel_message_id(message.id)
 
             print(
-                "[TICKET PANEL] Brak uprawnień do pobrania panelu."
+                f"[TICKET PANEL] Utworzono panel: {message.id}"
             )
-
-            return
 
         except discord.HTTPException as e:
-
             print(
-                f"[TICKET PANEL] Błąd HTTP podczas sprawdzania panelu: {e}"
+                f"[TICKET PANEL ERROR] {e}"
             )
 
-            # Nie próbujemy od razu wysyłać kolejnego requestu.
-            return
 
-    # =====================================================
-    # NOWY PANEL
-    # =====================================================
+# =========================================================
+# READY
+# =========================================================
 
-    try:
+@bot.event
+async def on_ready():
+    global views_registered
 
-        message = await channel.send(
-            view=TicketPanelView()
+    print(
+        f"Zalogowano jako {bot.user} "
+        f"(ID: {bot.user.id})"
+    )
+
+    await set_bot_status()
+
+    if not views_registered:
+        bot.add_view(TicketPanelView())
+
+        bot.add_view(
+            TicketActionView(
+                ticket_type="inne",
+                owner_mention="@user",
+                category_name="Inne"
+            )
         )
 
-        save_panel_message_id(
-            message.id
-        )
+        views_registered = True
 
-        print(
-            f"[TICKET PANEL] Utworzono panel: "
-            f"{message.id}"
-        )
+    await ensure_ticket_panel()
 
-    except discord.HTTPException as e:
+    print("Bot jest gotowy.")
 
-        print(
-            f"[TICKET PANEL ERROR] Nie można utworzyć panelu: {e}"... (4 KB left)
+
+# =========================================================
+# BŁĘDY INTERAKCJI
+# =========================================================
+
+@bot.event
+async def on_error(event, *args, **kwargs):
+    print(
+        f"[BOT EVENT ERROR] event={event}"
+    )
+
+
+# =========================================================
+# FLASK / RENDER
+# =========================================================
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def home():
+    return "Bot Discord działa!", 200
+
+
+@app.route("/health")
+def health():
+    return "OK", 200
+
+
+def run_web():
+    port = int(
+        os.environ.get("PORT", "10000")
+    )
+
+    app.run(
+        host="0.0.0.0",
+        port=port
+    )
+
+
+def keep_alive():
+    server = Thread(
+        target=run_web,
+        daemon=True
+    )
+    server.start()
+
+
+# =========================================================
+# START
+# =========================================================
+
+keep_alive()
+
+if __name__ == "__main__":
+    bot.run(TOKEN)
